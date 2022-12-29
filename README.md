@@ -1,7 +1,7 @@
 # ACU Uncertainty Estimation
 ***
 ## Name
-Predictive Uncertainty with Bayesian Logistic Regression to Identify Chemotherapy Patients at Risk for Acute Care
+A Bayesian Approach to Predictive Uncertainty in Chemotherapy Patients at Risk of Acute Care Use
 
 ## Description
 This is the implementation for Bayesian logistic regression to predict the risk of acute care use (ACU) and the quantification of predictive uncertainty.
@@ -19,7 +19,7 @@ This is the implementation for Bayesian logistic regression to predict the risk 
 
 ```
 @article{fanconi2022uncertainty,
-    title={Predictive Uncertainty with Bayesian Logistic Regression to Identify Chemotherapy Patients at Risk for Acute Care}, 
+    title={A Bayesian Approach to Predictive Uncertainty in Chemotherapy Patients at Risk of Acute Care Use}, 
     author={Claudio Fanconi and Anne de Hond and Dylan Peterson and Angelo Capodici and Tina Hernandez-Boussard},
     year={2022},
     booktitle={...},
