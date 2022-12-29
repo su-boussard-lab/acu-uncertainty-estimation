@@ -1,0 +1,12 @@
+arviz==0.12.0
+joblib==1.1.0
+matplotlib==3.5.1
+numpy==1.23.2
+pandas==1.4.2
+pymc3==3.11.5
+scikit_learn==1.1.2
+scipy==1.8.0
+seaborn==0.11.2
+theano==1.0.5
+Theano_PyMC==1.1.2
+uncertainty_calibration==0.0.9
