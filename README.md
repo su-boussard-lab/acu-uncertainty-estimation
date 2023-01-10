@@ -45,10 +45,10 @@ conda install -r requirements.txt
 ### Source Code Directory Tree
 ```
 .
-├── data                # Folder with synthetic data
-├── figures             # Figures of the experiments
-├── saved_posteriors    # Saved posterior traces for the experiments
-└── src                 # Source code            
+├── (data)                # Folder with data (default folder, to be created)
+├── (figures)             # Figures of the experiments (default folder, to be created)
+├── (saved_posteriors)    # Saved posterior traces for the experiments (default folder, to be created)
+└── src                   # Source code            
     ├── models              # Bayesian logistic regression models
     └── utils               # Useful functions, such as loggers and config
 
