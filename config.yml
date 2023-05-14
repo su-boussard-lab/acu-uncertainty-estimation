@@ -8,14 +8,16 @@ data:
   label_type: "ANY_30"                                   # Which labels are being used
   save_predictions: "./data/predictions/"
   save_posteriors: "./saved_posteriors"
-  figures_path: "./figures"
+  figures_path: "./ebiomedicine_figures"
 
 model:
-  frequentist_LASSO: True    # fit frequentist LASSO
+  frequentist_LASSO: False    # fit frequentist LASS
+  frequentist_LASSO_bootstrap: False    # fit frequentist LASSOO
   laplace_vi: True        # fit Laplace prior LogReg with Variational Inference
-  laplace_mh: True        # fit Laplace prior LogReg with Metrpolis-Hastings
-  horseshoe_mh: True      # fit Horseshoe+ prior LogReg with Metropolis-Hastings
-  pretrained: True        # If true, than it takes the posterior traces that have already been calculated
+  laplace_mh: False        # fit Laplace prior LogReg with Metrpolis-Hastings
+  horseshoe_mh: False      # fit Horseshoe+ prior LogReg with Metropolis-Hastings
+  pretrained: False        # If true, than it takes the posterior traces that have already been calculated
+
 
 uncertainty:
   thresholds: [0.1, 0.3, 0.5]   # List of thresholds to iterate over for coverage experiment

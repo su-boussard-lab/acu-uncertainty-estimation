@@ -3,9 +3,10 @@ Author:
     Claudio Fanconi
 """
 import os
+import pickle
 import pandas as pd
 import numpy as np
-from src.models.models import Horseshoe_Prior
+from src.models.models import Horseshoe_Prior, Laplace_Prior
 from src.utils.config import config
 from src.utils.data_preprocessing import preprocessing
 from src.utils.metrics import print_results
@@ -49,9 +50,16 @@ def main(random_state: int = 42) -> None:
         os.path.join(config.data.save_predictions, "frequentist_LASSO_predictions.npz"),
         allow_pickle=True,
     )["arr_0"]
+    frequentist_bootstrapped_LASSO = np.load(
+        os.path.join(
+            config.data.save_predictions,
+            "frequentist_LASSO_bootstrapped_predictions.npz",
+        ),
+        allow_pickle=True,
+    )["arr_0"]
     laplace_vi = np.load(
         os.path.join(
-            config.data.save_predictions, "laplace_vi_predictive_distribution.npz"
+            config.data.save_predictions, "laplace_vi_predictive_distribution_2.npz"
         ),
         allow_pickle=True,
     )["arr_0"]
@@ -74,6 +82,7 @@ def main(random_state: int = 42) -> None:
         "Laplace-MH": laplace_mh,
         "Horseshoe-MH": horseshoe_mh,
         "Frequentist LASSO": frequentist_LASSO,
+        # "Bootstrapped LASSO": frequentist_bootstrapped_LASSO,
     }
 
     # Create plots for 3 single patient predictions
@@ -88,7 +97,17 @@ def main(random_state: int = 42) -> None:
 
     # Create sorted predictions with uncertainties around them to visualize the coverage
     sorted_predictions_with_threshold(
-        horseshoe_mh, config.data.figures_path, t=config.uncertainty.arbitrary_threshold
+        horseshoe_mh,
+        config.data.figures_path,
+        t=config.uncertainty.arbitrary_threshold,
+        use_quantile=True,
+    )
+
+    sorted_predictions_with_threshold(
+        horseshoe_mh,
+        config.data.figures_path,
+        t=config.uncertainty.arbitrary_threshold,
+        use_quantile=False,
     )
 
     # Create coverage vs classification plot over models
@@ -97,11 +116,23 @@ def main(random_state: int = 42) -> None:
         config.uncertainty.thresholds,
         y_test,
         config.data.figures_path,
+        use_quantile=True,
+    )
+
+    plot_model_coverages(
+        predictive_distributions.copy(),
+        config.uncertainty.thresholds,
+        y_test,
+        config.data.figures_path,
+        use_quantile=False,
     )
 
     # Create coverage vs classification plot over uncertainty thresholds for single predictive distribution
     plot_uncertainty_coverages(
-        horseshoe_mh, config.uncertainty.thresholds, y_test, config.data.figures_path
+        horseshoe_mh,
+        config.uncertainty.thresholds,
+        y_test,
+        config.data.figures_path,
     )
 
     # Create posterior plot:
@@ -110,16 +141,44 @@ def main(random_state: int = 42) -> None:
     y_i = theano.shared(y_train.values)
     d = X_train.shape[1]
 
-    with pm.Model() as BLL:
-        # Define model in context
-        Horseshoe_Prior(X_i, y_i, d)
-        horseshoe_mh_posterior = pm.load_trace(
-            os.path.join(config.data.save_posteriors, "horseshoe_mh"), model=BLL
-        )
+    # load Frequentist Model
+    with open(
+        os.path.join(config.data.save_posteriors, "frequentist_LASSO.pkl"), "rb"
+    ) as f:
+        freq_model = pickle.load(f)
 
-    plot_certain_posteriors(
-        horseshoe_mh_posterior, feature_matrix.columns, config.data.figures_path
-    )
+    models_dict = {
+        "laplace_vi": "Laplace - VI",
+        "laplace_mh": "Laplace - MH",
+        "horseshoe_mh": "Horseshoe - MH",
+    }
+
+    for filename, modelname in models_dict.items():
+        # load Bayesian Model
+        with pm.Model() as BLL:
+            # Define model in context
+            if "Horseshoe" in modelname:
+                Horseshoe_Prior(X_i, y_i, d)
+            else:
+                Laplace_Prior(X_i, y_i, d)
+            if "VI" in modelname:
+                with open(
+                    os.path.join(config.data.save_posteriors, "laplace_vi_2.pkl"), "rb"
+                ) as f:
+                    posterior = pickle.load(f)
+            else:
+                posterior = pm.load_trace(
+                    os.path.join(config.data.save_posteriors, filename), model=BLL
+                )
+
+        plot_certain_posteriors(
+            posterior,
+            freq_model,
+            feature_matrix.columns,
+            config.data.figures_path,
+            modelname,
+            quantile=0.99,
+        )
 
 
 if __name__ == "__main__":

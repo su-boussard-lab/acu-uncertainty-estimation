@@ -5,9 +5,24 @@ Author:
 import os
 import pandas as pd
 import numpy as np
+from collections import defaultdict
+from typing import Dict
 from src.utils.config import config
 from src.utils.metrics import print_results
-from src.utils.plots import calibration_plot, net_benefit_plot
+from src.utils.plots import calibration_plot, net_benefit_plot, violin_plot
+
+
+def transpose_dict(dct: Dict) -> Dict:
+    """Transposes a dictionary of dictionaries
+    Args: dct (Dict): a dict of dicts
+    returns:
+        dict of dicts with transposed keys
+    """
+    d = defaultdict(dict)
+    for key1, inner in dct.items():
+        for key2, value in inner.items():
+            d[key2][key1] = value
+    return d
 
 
 def main(random_state: int = 42) -> None:
@@ -36,9 +51,16 @@ def main(random_state: int = 42) -> None:
         os.path.join(config.data.save_predictions, "frequentist_LASSO_predictions.npz"),
         allow_pickle=True,
     )["arr_0"]
+    frequentist_bootstrapped_LASSO = np.load(
+        os.path.join(
+            config.data.save_predictions,
+            "frequentist_LASSO_bootstrapped_predictions.npz",
+        ),
+        allow_pickle=True,
+    )["arr_0"]
     laplace_vi = np.load(
         os.path.join(
-            config.data.save_predictions, "laplace_vi_predictive_distribution.npz"
+            config.data.save_predictions, "laplace_vi_predictive_distribution_2.npz"
         ),
         allow_pickle=True,
     )["arr_0"]
@@ -61,12 +83,20 @@ def main(random_state: int = 42) -> None:
         "Laplace-MH": laplace_mh.mean(0),
         "Horseshoe-MH": horseshoe_mh.mean(0),
         "Frequentist LASSO": frequentist_LASSO,
+        # "Frequentist Bootstrapped LASSO": frequentist_bootstrapped_LASSO.mean(0),
     }
 
     # Calculate the predictive metrics
+    bootstraps_metrics = {}
     for name, y_pred in predictions.items():
         print(name)
-        print_results(y_test, y_pred)
+        bootstrap_dict = print_results(y_test, y_pred)
+        bootstraps_metrics[name] = bootstrap_dict
+
+    # Calculate Violin plot
+    bootstraps_metrics = transpose_dict(bootstraps_metrics)
+    for metric, bootstrap in bootstraps_metrics.items():
+        violin_plot(metric, bootstrap, config.data.figures_path)
 
     # Create calibration plot
     calibration_plot(predictions, y_test, config.data.figures_path)

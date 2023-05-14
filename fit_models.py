@@ -3,13 +3,15 @@ Author:
     Claudio Fanconi
 """
 import os
+import pickle
+
 import pandas as pd
 import numpy as np
 import pymc3 as pm
 from pymc3.variational.callbacks import CheckParametersConvergence
-
 import theano
 from sklearn.linear_model import LogisticRegression
+from tqdm import tqdm
 
 from src.utils.config import config
 from src.utils.data_preprocessing import preprocessing
@@ -52,6 +54,50 @@ def main(random_state: int = 42) -> None:
             frequentist_LASSO_predictions,
         )
 
+        # save model
+        with open(
+            os.path.join(config.data.save_posteriors, "frequentist_LASSO.pkl"), "wb"
+        ) as f:
+            pickle.dump(frequentist_LASSO, f)
+
+    # ------------ Bootstrapped L1 Lasso Regression ------------------------------------------
+    if config.model.frequentist_LASSO_bootstrap:
+
+        bootstrapped_models = []
+        length = len(X_train)
+        print("Fitting frequentist Bootstrapped LASSO")
+        for i in tqdm(range(10000)):
+            indices = np.random.randint(0, length, length)
+            frequentist_LASSO = LogisticRegression(
+                penalty="l1", max_iter=1000, solver="liblinear", C=0.02
+            )
+            frequentist_LASSO.fit(X_train[indices], y_train.values[indices])
+            bootstrapped_models.append(frequentist_LASSO)
+
+        print("Predicting frequentist LASSO")
+        bootstrapped_predictions = np.zeros((10000, len(X_test)))
+        for i, model in enumerate(bootstrapped_models):
+            prediction = model.predict_proba(X_test)[:, 1]
+            bootstrapped_predictions[i] = prediction
+
+        # Save predictions
+        np.savez(
+            os.path.join(
+                config.data.save_predictions,
+                "frequentist_LASSO_bootstrapped_predictions.npz",
+            ),
+            bootstrapped_predictions,
+        )
+
+        # save model
+        with open(
+            os.path.join(
+                config.data.save_posteriors, "frequentist_LASSO_boostrapped.pkl"
+            ),
+            "wb",
+        ) as f:
+            pickle.dump(bootstrapped_models, f)
+
     # ------------ Laplace prior BLR with Variational Inference ------------------------------
     if config.model.laplace_vi:
         # Set Theano shared variables
@@ -84,9 +130,14 @@ def main(random_state: int = 42) -> None:
                 # Save posterior
                 pm.save_trace(
                     trace=laplace_vi_posterior,
-                    directory=os.path.join(config.data.save_posteriors, "laplace_vi"),
+                    directory=os.path.join(config.data.save_posteriors, "laplace_vi_2"),
                     overwrite=True,
                 )
+                # save model
+                with open(
+                    os.path.join(config.data.save_posteriors, "laplace_vi_2.pkl"), "wb"
+                ) as f:
+                    pickle.dump(laplace_vi_posterior, f)
 
         print("Predicting Laplace prior BLR with Variational Inference")
         X_i.set_value(X_test)
@@ -97,7 +148,7 @@ def main(random_state: int = 42) -> None:
         # Save predictive distrubtions
         np.savez(
             os.path.join(
-                config.data.save_predictions, "laplace_vi_predictive_distribution.npz"
+                config.data.save_predictions, "laplace_vi_predictive_distribution_2.npz"
             ),
             laplace_vi_predictive_distribution["p"],
         )

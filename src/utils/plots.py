@@ -6,6 +6,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.pyplot import figure
 from sklearn.calibration import calibration_curve
+from sklearn.linear_model import LogisticRegression
 import calibration as cal
 import arviz as az
 import seaborn as sns
@@ -53,13 +54,41 @@ def calibration_plot(preds: Dict, y_true: np.ndarray, save_path: str) -> None:
         ax.plot(y, x, marker=".", label=model)
 
     ax.plot([0, 1], [0, 1], linestyle="--", label="Ideally Calibrated")
-    ax.set_title(f"Calibration Curve")
+    # ax.set_title(f"Calibration Curve")
     ax.legend()
     ax.set_xlabel("Average Predicted Probability in each bin")
     ax.set_ylabel("Ratio of positives")
-    ax.grid()
+    # ax.grid()
     plt.savefig(
         os.path.join(save_path, "calibrations.pdf"), dpi=300.0, bbox_inches="tight"
+    )
+
+
+def violin_plot(metric: str, preds: Dict, save_path: str) -> None:
+    """Creates a violin plot of the bootstrapped metrics
+    Args:
+        metric (str): name of the metric that is compared
+        preds (Dict): dictionary of predictions with model name as key and bootstraps as values
+        save_path (str): path where the figure will be stored
+    Returns:
+        None
+    """
+    fig, axes = plt.subplots(ncols=1, figsize=(9, 3))
+
+    data_df = pd.DataFrame(preds)
+    sns.violinplot(
+        data=data_df,
+    )
+
+    # plt.title(f"{metric} Bootstrapped Scores")
+    plt.ylabel(f"{metric}")
+    # #plt.grid()
+    plt.gca().spines["right"].set_color("none")
+    plt.gca().spines["top"].set_color("none")
+    plt.savefig(
+        os.path.join(save_path, f"{metric}_bootstrap_violin.pdf"),
+        dpi=300.0,
+        bbox_inches="tight",
     )
 
 
@@ -72,7 +101,7 @@ def net_benefit_plot(preds: Dict, y_true: np.ndarray, save_path: str) -> None:
     Returns:
         None
     """
-    fig, axes = plt.subplots(ncols=1, figsize=(8, 6))
+    fig, axes = plt.subplots(ncols=1, figsize=(9, 3))
 
     ax = axes
     for model, y_pred in preds.items():
@@ -80,12 +109,14 @@ def net_benefit_plot(preds: Dict, y_true: np.ndarray, save_path: str) -> None:
     treat_all_curve(ax, y_true, lowest_net_benefit=-0.2, title="Treat All")
     treat_none_curve(ax, title="Treat None")
 
-    ax.set_title(f"Net Benefit")
+    # ax.set_title(f"Net Benefit")
     ax.legend(loc="upper right")
     ax.set_ylim(bottom=-0.1)
     ax.set_xlabel("Risk Threshold")
     ax.set_ylabel("Net Benefit Score")
-    ax.grid()
+    ax.spines["top"].set_visible(False)
+    ax.spines["right"].set_visible(False)
+    # ax.grid()
     plt.savefig(
         os.path.join(save_path, "net_benefit.pdf"), dpi=300.0, bbox_inches="tight"
     )
@@ -101,25 +132,25 @@ def uncertainty_vs_predictions(preds: Dict, save_path: str) -> None:
     """
     preds.pop("Frequentist LASSO")
 
-    fig, axes = plt.subplots(ncols=1, figsize=(8, 6))
+    fig, axes = plt.subplots(ncols=1, figsize=(6, 4.5))
     # Plot perfectly calibrated
     ax = axes
+    from scipy.special import entr
+
     for model, pred_distribution in preds.items():
         y_pred = pred_distribution.mean(0)
         y_uncerts = pred_distribution.std(0)
-        
-        import IPython
-        IPython.embed()
-        exit()
-
+        # y_uncerts = entr(pred_distribution).mean(axis=0)
         # Plot model's calibration curve
-        ax.scatter(y_pred, y_uncerts, marker=".", label=model, s=3)
+        ax.scatter(y_pred, y_uncerts, marker=".", label=model, s=2, alpha=0.5)
 
-    ax.set_title(f"Uncertainties at Risk Predictions")
-    ax.legend(loc="upper right")
-    ax.set_xlabel("Predicted Risk Probability")
+    # ax.set_title(f"Uncertainties at Risk Predictions")
+    ax.legend(loc="upper right", markerscale=5)
+    ax.set_xlabel("Predicted Risk Probability ($\\bar{y}$)")
     ax.set_ylabel("Predictive Uncertainty ($\sigma$)")
-    ax.grid()
+    ax.spines["top"].set_visible(False)
+    ax.spines["right"].set_visible(False)
+    # ax.grid()
     plt.savefig(
         os.path.join(save_path, "uncertainty_scatter_plot.pdf"),
         dpi=300.0,
@@ -142,60 +173,76 @@ def single_predictions(
     Returns:
         None
     """
-    titles = ["(a)", "(b)", "(c)"]
+    titles = ["a", "b", "c"]
     interesting_index = [1657, 1, 1259]
 
-    fig, axes = plt.subplots(ncols=3, figsize=(24, 6))
+    # fig, axes = plt.subplots(ncols=3, figsize=(24, 6))
 
     lasso_preds = preds.pop("Frequentist LASSO")
 
+    y_bar_string = "$\\bar{y}$"
     for i, (title, pat_index) in enumerate(zip(titles, interesting_index)):
-        ax = axes[i]
+
+        figure(figsize=(5, 5))
+        cols = iter(jama_style_colors)
+        y_true = y_test.values[pat_index]
+
         cols = iter(jama_style_colors)
         for model, pred_distribution in preds.items():
+            current_col = next(cols)
             distribution_of_patient = pred_distribution[:, pat_index]
             y_pred = distribution_of_patient.mean()
-
-            y_true = y_test.values[pat_index]
-            current_col = next(cols)
-            sns.histplot(
-                distribution_of_patient,
-                bins=20,
-                label=model,
-                ax=ax,
-                stat="probability",
-                kde=True,
-                color=current_col,
-                alpha=0.3,
+            plt.axvline(
+                x=y_pred, color=current_col, label=f"{y_bar_string} {model}", alpha=0.7
             )
-            ax.axvline(x=y_pred, color=current_col, label=f"$\mu$ {model}")
             # Plot uncertainty bounds
             if plot_uncertainty_boarders:
                 y_uncert = distribution_of_patient.std()
-                ax.axvline(x=y_pred - y_uncert, color=current_col, linestyle="--")
-                ax.axvline(x=y_pred + y_uncert, color=current_col, linestyle="--")
+                plt.axvline(x=y_pred - y_uncert, color=current_col, linestyle="--")
+                plt.axvline(x=y_pred + y_uncert, color=current_col, linestyle="--")
 
         # frequentist LASSO
-        ax.axvline(
+        plt.axvline(
             x=lasso_preds[pat_index],
             color=next(cols),
-            label=f"$\mu$ Frequentist LASSO",
+            label="$\\bar{y}$ Frequentist LASSO",
+            alpha=0.7,
         )
-        # Plot settings
-        ax.set_title(
-            r"$\bf{{{}}}$ ".format(title)
-            + f"Predictive Distribution of a Single Patient\nLabel: {y_true}"
-        )
-        ax.legend()
-        ax.set_xlabel("Predicted Risk")
-        ax.set_ylabel("Probability")
-        ax.grid()
 
-    plt.savefig(
-        os.path.join(save_path, "use_case_i_predictions.pdf"),
-        dpi=300.0,
-        bbox_inches="tight",
-    )
+        cols = iter(jama_style_colors)
+        for model, pred_distribution in preds.items():
+            distribution_of_patient = pred_distribution[:, pat_index]
+
+            current_col = next(cols)
+            sns.kdeplot(
+                distribution_of_patient,
+                # bins=20,
+                label=model,
+                # ax=ax,
+                # stat="probability",
+                # kde=True,
+                clip=(0, 1),
+                color=current_col,
+                alpha=0.3,
+                fill=True,
+                common_norm=False,
+            )
+
+        # Plot settings
+        plt.legend(bbox_to_anchor=(0, 1, 1, 0), loc="lower left", mode="expand", ncol=2)
+        # plt.title(
+        #    f"Predictive Distribution of a Single Patient\nLabel: {y_true}", y=1.25
+        # )
+        plt.xlabel("Predicted Risk")
+        # plt.ylabel("Probability")
+        # #plt.grid()
+        plt.gca().spines["right"].set_color("none")
+        plt.gca().spines["top"].set_color("none")
+        plt.savefig(
+            os.path.join(save_path, f"use_case_i_predictions_{title}.pdf"),
+            dpi=300.0,
+            bbox_inches="tight",
+        )
 
 
 def sorted_predictions_with_threshold(
@@ -216,12 +263,13 @@ def sorted_predictions_with_threshold(
         quantile (float, 0.95): quantile if `use_quantile`is set to true
     Returns None
     """
-    figure(figsize=(16, 6))
+    figure(figsize=(8, 8))
     mean = predictive_distribution.mean(0)
     sort = np.argsort(mean)
     mean = mean[sort]
 
     if use_quantile:
+        quantified_uncertainty_string = f"{int(quantile*100)}%-credible interval"
         high = np.quantile(
             predictive_distribution, quantile, axis=0, method="inverted_cdf"
         )
@@ -230,7 +278,12 @@ def sorted_predictions_with_threshold(
         )
         high = high[sort]
         low = low[sort]
+        std = np.vstack([mean - low, high - mean])
+
     else:
+        quantified_uncertainty_string = (
+            str(int(std_factor)) + "$\sigma$" if std_factor != 1 else "$\sigma$"
+        )
         std = std_factor * predictive_distribution.std(0)
         std = std[sort]
         high = mean + std
@@ -242,36 +295,41 @@ def sorted_predictions_with_threshold(
         range(len(mean)),
         t * np.ones_like(mean),
         marker=".",
-        label=f"Classification Threshold (t={t})",
+        label=f"Classification Threshold (t={t}, coverage={mask.mean():.2f})",
     )
+    mean_string = "$\\bar{y}$"
     plt.errorbar(
         np.arange(len(mean))[~mask],
         mean[~mask],
-        yerr=std[~mask],
+        yerr=std[:, ~mask] if use_quantile else std[~mask],
         marker=".",
         alpha=0.2,
-        label="Risk $\pm$ uncertainty ($\mu \pm \sigma$): uncertain classification",
+        label=f"Risk score ({mean_string}) and uncertainty ({quantified_uncertainty_string}): uncertain classification",
         ls="none",
     )
     plt.errorbar(
         np.arange(len(mean))[mask],
         mean[mask],
-        yerr=std[mask],
+        yerr=std[:, mask] if use_quantile else std[mask],
         marker=".",
         alpha=0.2,
-        label="Risk $\pm$ uncertainty ($\mu \pm \sigma$): certain classification",
+        label=f"Risk score ({mean_string}) and uncertainty ({quantified_uncertainty_string}): certain classification",
         ls="none",
     )
 
-    plt.title(
-        f"Sorted Predictions with Uncertainties for the Horseshoe MH Model\nCoverage: {mask.mean():.2f}"
-    )
+    # plt.title(
+    #    f"Sorted Predictions with Uncertainties for the Horseshoe-MH Model\nCoverage: {mask.mean():.2f}"
+    # )
     plt.ylabel("Risk Probability")
     plt.xlabel("Index")
     plt.legend()
-    plt.grid()
+    plt.gca().spines["right"].set_color("none")
+    plt.gca().spines["top"].set_color("none")
+    # plt.grid()
     plt.savefig(
-        os.path.join(save_path, "sorted_plot.pdf"), dpi=300.0, bbox_inches="tight"
+        os.path.join(save_path, f"sorted_plot_{use_quantile}.pdf"),
+        dpi=300.0,
+        bbox_inches="tight",
     )
 
 
@@ -301,14 +359,13 @@ def plot_model_coverages(
 
     metrics = [f1_score, precision_score, recall_score]
     metric_names = ["F1 Score", "Precision (PPV)", "Recall (Sensitivity)"]
-    titles = ["(a)", "(b)", "(c)"]
+    titles = ["a", "b", "c"]
 
-    fig, axes = plt.subplots(ncols=3, figsize=(24, 6))
     for i, (metric, metric_name, title) in enumerate(
         zip(metrics, metric_names, titles)
     ):
+        figure(figsize=(5, 5))
         thresholds.append(np.round(y_true.mean(), 2))
-        ax = axes[i]
         for model, pred in preds.items():
             y_pred = pred.mean(0)
             if use_quantile:
@@ -326,18 +383,20 @@ def plot_model_coverages(
                 coverage = mask.mean()
                 coverages.append(coverage)
                 ppvs.append(ppv)
-            ax.scatter(ppvs, coverages, marker="x", label=f"{model}", s=60)
-            ax.plot(ppvs, coverages, linestyle="--")
+            plt.scatter(ppvs, coverages, marker="x", label=f"{model}", s=60)
+            plt.plot(ppvs, coverages, linestyle="--")
             for i, txt in enumerate(sorted(thresholds)):
-                ax.annotate(f"t={txt}", (ppvs[i], coverages[i]))
+                plt.annotate(f"t={txt}", (ppvs[i], coverages[i]))
         del thresholds[-1]
-        ax.set_title(r"$\bf{{{}}}$ ".format(title) + f"{metric_name} vs Coverage")
-        ax.legend()
-        ax.set_xlabel(f"{metric_name}")
-        ax.set_ylabel("% Data Classified")
-        ax.grid()
+        # plt.title(f"{metric_name} vs Coverage")
+        plt.legend()
+        plt.xlabel(f"{metric_name}")
+        plt.ylabel("Coverage")
+        plt.gca().spines["right"].set_color("none")
+        plt.gca().spines["top"].set_color("none")
+        # plt.grid()
         plt.savefig(
-            os.path.join(save_path, "coverage_vs_metric.pdf"),
+            os.path.join(save_path, f"coverage_vs_metric_{title}_{use_quantile}.pdf"),
             dpi=300.0,
             bbox_inches="tight",
         )
@@ -365,15 +424,14 @@ def plot_uncertainty_coverages(
     metrics = [f1_score, precision_score, recall_score]
     metric_names = ["F1 Score", "Precision (PPV)", "Recall (Sensitivity)"]
     color_palette = ["#A85CF9", "#5534A5", "#4B7BE5", "#6FDFDF"]
-    titles = ["(a)", "(b)", "(c)"]
+    titles = ["a", "b", "c"]
 
-    fig, axes = plt.subplots(ncols=3, figsize=(24, 6))
     for i, (title, metric, metric_name) in enumerate(
         zip(titles, metrics, metric_names)
     ):
+        figure(figsize=(5, 5))
         cols = iter(color_palette)
         thresholds.append(np.round(y_true.mean(), 2))
-        ax = axes[i]
         y_pred = predictive_distribution.mean(0)
         for std in std_factors:
             current_cols = next(cols)
@@ -386,7 +444,7 @@ def plot_uncertainty_coverages(
                 coverage = mask.mean()
                 coverages.append(coverage)
                 ppvs.append(ppv)
-            ax.scatter(
+            plt.scatter(
                 ppvs,
                 coverages,
                 marker="x",
@@ -394,9 +452,9 @@ def plot_uncertainty_coverages(
                 s=60,
                 color=current_cols,
             )
-            ax.plot(ppvs, coverages, linestyle="--", color=current_cols)
+            plt.plot(ppvs, coverages, linestyle="--", color=current_cols)
             for i, txt in enumerate(sorted(thresholds)):
-                ax.annotate(f"t={txt}", (ppvs[i], coverages[i]))
+                plt.annotate(f"t={txt}", (ppvs[i], coverages[i]))
         for quant in quantiles:
             current_cols = next(cols)
             high = np.quantile(
@@ -413,7 +471,7 @@ def plot_uncertainty_coverages(
                 coverage = mask.mean()
                 coverages.append(coverage)
                 ppvs.append(ppv)
-            ax.scatter(
+            plt.scatter(
                 ppvs,
                 coverages,
                 marker="x",
@@ -421,19 +479,19 @@ def plot_uncertainty_coverages(
                 s=60,
                 color=current_cols,
             )
-            ax.plot(ppvs, coverages, linestyle="--", color=current_cols)
+            plt.plot(ppvs, coverages, linestyle="--", color=current_cols)
             for i, txt in enumerate(sorted(thresholds)):
-                ax.annotate(f"t={txt}", (ppvs[i], coverages[i]))
+                plt.annotate(f"t={txt}", (ppvs[i], coverages[i]))
         del thresholds[-1]
-        ax.set_title(
-            r"$\bf{{{}}}$ ".format(title) + f"{metric_name} vs Coverage Horseshoe MH"
-        )
-        ax.legend()
-        ax.set_xlabel(f"{metric_name}")
-        ax.set_ylabel("% Data Classified")
-        ax.grid()
+        # plt.title(f"{metric_name} vs Coverage Horseshoe MH")
+        plt.legend()
+        plt.xlabel(f"{metric_name}")
+        plt.ylabel("% Data Classified")
+        plt.gca().spines["right"].set_color("none")
+        plt.gca().spines["top"].set_color("none")
+        # plt.grid()
         plt.savefig(
-            os.path.join(save_path, "coverage_vs_metric_scale_quantiles.pdf"),
+            os.path.join(save_path, f"coverage_vs_metric_scale_quantiles_{title}.pdf"),
             dpi=300.0,
             bbox_inches="tight",
         )
@@ -441,50 +499,74 @@ def plot_uncertainty_coverages(
 
 def plot_certain_posteriors(
     posterior: np.ndarray,
+    frequentist_lasso: LogisticRegression,
     column_names: List,
     save_path: str,
+    model_name: str,
     quantile: float = 0.95,
 ) -> None:
     """Plots the distributions of the certain posteriors, with a credible interval of `quantile` over or below 0.
     Args:
         posterior (np.ndarray): posterior [n_samples, n_features]
+        frequentist_lasso (sklearn.linear_models.LogisticRegression): frequentist model to find out frequentist coefficient counterpart
         column_names (List): list of names of the corresponding features
         save_path (str): path where the figure will be stored
+        model_name(str): name of the model
         quantiles (float: 0.95): quantiles for credible intervals
     """
 
     feature_dict = {}
-    for feat, name in zip(posterior["beta"].T, column_names):
-        mean = feat.mean()
-        std = feat.std()
+    frequentist_features = []
+    for feat, freq_feat, name in zip(
+        posterior["beta"].T, frequentist_lasso.coef_[0], column_names
+    ):
         low = np.quantile(feat, 1 - quantile, method="inverted_cdf")  # mean - std
         high = np.quantile(feat, quantile, method="inverted_cdf")  # mean + std
-        if not (high > 0 and low < 0) and "DX_" not in name and "PROC_" not in name:
+        if not (high > 0 and low < 0):  # and "PROC_" not in name:
             new_name = " ".join(
                 [
-                    x.capitalize() if name.split("_")[0] != "LABS" else f"LAB: {x}"
+                    x.capitalize()
+                    if name.split("_")[0] not in ["LABS", "PROC", "DX"]
+                    else f"{name.split('_')[0].upper()}: {name.split('_')[1]}"
                     for x in name.split("_")[1:]
                 ]
             )
             feature_dict[new_name] = feat
+            frequentist_features.append(freq_feat)
+
+    if not feature_dict:
+        return
 
     axes = az.plot_forest(
         feature_dict,
         kind="ridgeplot",
         combined=True,
         ridgeplot_truncate=False,
-        ridgeplot_quantiles=[0.25, 0.5, 0.75],
+        ridgeplot_quantiles=[0.5],
         ridgeplot_overlap=3,
         colors="#00A1D5FF",
-        figsize=(6, 6),
+        figsize=(6, 10),
+    )
+    axes[0].scatter(
+        list(reversed(frequentist_features)),
+        4.04 * np.arange(len(frequentist_features)),
+        marker="x",
+        label="Frequentist LASSO\ncoefficients",
+        color="#B24745FF",
+        s=80,
     )
     plt.grid()
+    plt.legend()
     plt.axvline(x=0)
-    plt.title(
-        f"Posterior Distribution of {int(quantile*100)}% - Credible Variables\nHorseshoe - MH model"
-    )
+    plt.gca().spines["right"].set_color("none")
+    plt.gca().spines["top"].set_color("none")
+    # plt.title(
+    #    f"Posterior Distribution of {int(quantile*100)}% - Credible Variables\n{model_name} model"
+    # )
+    file_name = "".join(model_name.split(" ")).lower()
+
     plt.savefig(
-        os.path.join(save_path, "variables_posterior.pdf"),
+        os.path.join(save_path, f"variables_posterior_{file_name}.pdf"),
         dpi=300.0,
         bbox_inches="tight",
     )
@@ -518,7 +600,7 @@ def plot_group_uncertainty(
     Returns:
         None
     """
-    figure(figsize=(16, 6))
+    figure(figsize=(10, 4))
     data_df = feature_matrix[names_dict.keys()]
     if use_quantile:
         quantified_uncertainty_string = f"{int(quantile*100)}%-credible interval"
@@ -568,11 +650,13 @@ def plot_group_uncertainty(
     ]
     stat, p = stats.kruskal(*groups)
     p = np.round(p, 3) if p > 0.001 else "< 0.001"
-    plt.title(
-        f"{uncertainty_col_name} Distribution by {group_name} for Horseshoe-MH\n Kruskal-Wallis H-statistic: {stat:.2f}, p-value: {p}"
-    )
-    plt.grid()
+    # plt.title(
+    #    f"{uncertainty_col_name} Distribution by {group_name} for Horseshoe-MH\n Kruskal-Wallis Test p-value: {p}"
+    # )
+    # plt.grid()
     plt.xticks(rotation=rotation)
+    plt.gca().spines["right"].set_color("none")
+    plt.gca().spines["top"].set_color("none")
     plt.savefig(
         os.path.join(
             save_path, f"uncertainty_{'_'.join(group_name.lower().split())}.pdf"
@@ -608,7 +692,7 @@ def plot_group_uncertainty_binary(
     Returns:
         None
     """
-    figure(figsize=(16, 6))
+    figure(figsize=(10, 4))
     data_df = feature_matrix[[col_group_name]]
     yes = int(data_df[col_group_name].sum())
     no = int(len(data_df[col_group_name]) - data_df[col_group_name].sum())
@@ -656,10 +740,12 @@ def plot_group_uncertainty_binary(
     ]
     stat, p = stats.kruskal(*groups)
     p = np.round(p, 3) if p > 0.001 else "< 0.001"
-    plt.title(
-        f"{uncertainty_col_name} Distribution by Depression for Horseshoe-MH\n Kruskal-Wallis H-statistic: {stat:.2f}, p-value: {p}"
-    )
-    plt.grid()
+    # plt.title(
+    #    f"{uncertainty_col_name} Distribution by Depression for Horseshoe-MH\n Kruskal-Wallis Test p-value: {p}"
+    # )
+    # plt.grid()
+    plt.gca().spines["right"].set_color("none")
+    plt.gca().spines["top"].set_color("none")
     plt.savefig(
         os.path.join(
             save_path, f"uncertainty_{'_'.join(group_name.lower().split())}.pdf"

@@ -7,24 +7,26 @@ import pandas as pd
 from sklearn.metrics import roc_auc_score, average_precision_score, log_loss
 import matplotlib.pyplot as plt
 import calibration as cal
+from typing import Tuple, Dict
 
 
-def bootstrap(df, func=roc_auc_score):
+def bootstrap(df, func=roc_auc_score) -> Tuple:
     """Bootstrap for calculating the confidence interval of a metric function
     Args:
         df (pd.DataFrame): dataframe containing 'predictions' and ' outcomes'
         func (function): metric function that takes (y_true, y_pred) as parameters
     Returns:
         lower, upper 95% confidence interval
+        full bootstrap
     """
     aucs = []
     for i in range(1000):
         sample = df.sample(
-            n=df.shape[0] - int(df.shape[0] / 5), random_state=i
+            n=df.shape[0], random_state=i, replace=True
         )  # take 80% for the bootstrap
         aucs.append(func(sample["outcomes"], sample["predictions"]))
 
-    return np.percentile(np.array(aucs), 2.5), np.percentile(np.array(aucs), 97.5)
+    return np.percentile(np.array(aucs), 2.5), np.percentile(np.array(aucs), 97.5), aucs
 
 
 def bayesian_ci(y_true: np.ndarray, y_preds: np.ndarray, func=roc_auc_score):
@@ -160,31 +162,41 @@ def net_benefit(
     return (TP.sum() - threshold / (1 - threshold) * FP.sum()) / N
 
 
-def print_results(y_true: np.ndarray, y_pred: np.ndarray) -> None:
+def print_results(
+    y_true: np.ndarray,
+    y_pred: np.ndarray,
+) -> Dict:
     """Print all the performance metrics (AUROC, AUPRC, LL, ECE, Entropy)
     Args:
         y_true (np.ndarray): true labels
         y_pred (np.ndarray): predicted risk scores
     Returns:
-        None
+        Dict of the bootstraps
     """
     results = {"predictions": y_pred, "outcomes": y_true}
     y_pred = y_pred
     results_df = pd.DataFrame(data=results)
-
-    low_95, high_95 = bootstrap(results_df)
+    bootstraps = []
+    low_95, high_95, bootstrap_auroc = bootstrap(results_df)
     print(
         f"AUROC: {roc_auc_score(y_true, y_pred):.3f} (95%-CI:{low_95:.3f},{high_95:.3f})"
     )
-    low_95, high_95 = bootstrap(results_df, func=average_precision_score)
+    low_95, high_95, bootstrap_auprc = bootstrap(
+        results_df, func=average_precision_score
+    )
     print(
         f"AUPRC: {average_precision_score(y_true, y_pred):.3f} (95%-CI:{low_95:.3f},{high_95:.3f})"
     )
-    low_95, high_95 = bootstrap(results_df, func=log_loss)
+    low_95, high_9, bootstrap_ce = bootstrap(results_df, func=log_loss)
     print(
         f"Cross-Entropy: {log_loss(y_true, y_pred):.3f} (95%-CI:{low_95:.3f},{high_95:.3f})"
     )
-    low_95, high_95 = bootstrap(results_df, func=ece)
+    low_95, high_95, bootstrap_ece = bootstrap(results_df, func=ece)
     print(f"ECE: {ece(y_true, y_pred):.3f} (95%-CI:{low_95:.3f},{high_95:.3f})")
-    low_95, high_95 = bootstrap(results_df, func=prediction_entropy)
     print("--------------------------")
+    return {
+        "AUROC": bootstrap_auroc,
+        "AUPRC": bootstrap_auprc,
+        "Log-Loss": bootstrap_ce,
+        "ECE": bootstrap_ece,
+    }
