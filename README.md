@@ -20,11 +20,16 @@ This is the implementation for Bayesian logistic regression to predict the risk 
 ## Cite Us
 
 ```
-@article{fanconi2022uncertainty,
-    title={A Bayesian Approach to Predictive Uncertainty in Chemotherapy Patients at Risk of Acute Care Use}, 
-    author={Claudio Fanconi and Anne de Hond and Dylan Peterson and Angelo Capodici and Tina Hernandez-Boussard},
-    year={2022},
-    booktitle={...},
+@article{FANCONI2023104632,
+title = {A Bayesian approach to predictive uncertainty in chemotherapy patients at risk of acute care utilization},
+journal = {eBioMedicine},
+volume = {92},
+pages = {104632},
+year = {2023},
+issn = {2352-3964},
+doi = {https://doi.org/10.1016/j.ebiom.2023.104632},
+url = {https://www.sciencedirect.com/science/article/pii/S2352396423001974},
+author = {Claudio Fanconi and Anne {de Hond} and Dylan Peterson and Angelo Capodici and Tina Hernandez-Boussard}
 }
 ```
 
